@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.aws-sam/
+__pycache__/
+samconfig.toml
+.venv/
+.env.local
+.env.*.local
