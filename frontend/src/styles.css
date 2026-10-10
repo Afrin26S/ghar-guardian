@@ -38,3 +38,4 @@ dt { color:var(--ink); opacity:.65; } dd { margin:0; }
 .err { background:var(--bad); color:#fff; padding:8px 12px; border-radius:6px; }
 .scroll { overflow-x:auto; } table { border-collapse:collapse; width:100%; min-width:640px; font-size:.92rem; }
 th, td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); vertical-align:top; } th { font-weight:600; }
+main > .panel { margin-bottom: 16px; }

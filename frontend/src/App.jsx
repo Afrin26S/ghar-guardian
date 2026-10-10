@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getSnapshot, sendEvent, API_HOST } from "./api.js";
+import { fetchForecast, advisory, PLACE_NAME } from "./forecast.js";
+import { buildReport, litresAtRisk } from "./report.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const LABEL = {
@@ -48,11 +50,16 @@ export default function App() {
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [anomaly, setAnomaly] = useState("PUMP_NO_RISE");
+  const [forecast, setForecast] = useState(undefined); // undefined = loading, null = unavailable
+  const [copied, setCopied] = useState(false);
+  const faultRef = useRef(false);
 
   useEffect(() => {
     getSnapshot().then((d) => { setS(d.state); setEvents(d.events); setStorage(d.storage); })
       .catch((e) => setErr(e.message));
   }, []);
+
+  useEffect(() => { fetchForecast().then(setForecast).catch(() => setForecast(null)); }, []);
 
   async function run(type, params) {
     const d = await sendEvent(type, params);
@@ -66,11 +73,15 @@ export default function App() {
     try { await fn(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
   const rain = (profile) => guard(async () => {
-    setDecision(null);
+    setDecision(null); faultRef.current = false;
     await run("START_RAIN"); await sleep(2200);
     await run("FIRST_FLUSH_DONE"); await sleep(1800);
     let d = await run("SUBMIT_SAMPLE", { profile });
-    while (d.state.rain_safe_state === "COLLECTING") { await sleep(1100); d = await run("FILL_TICK"); }
+    while (d.state.rain_safe_state === "COLLECTING") {
+      await sleep(1100);
+      if (faultRef.current) { await run("SIMULATE_GATE_FAULT"); break; }
+      d = await run("FILL_TICK");
+    }
   });
 
   if (!s) return <main className="boot">{err ? <p className="err">{err}</p> : <p>Connecting to the water system…</p>}</main>;
@@ -78,6 +89,13 @@ export default function App() {
   const live = storage === "dynamodb";
   const v = decision?.verification;
   const sample = s.last_sample;
+  const adv = advisory(forecast, s.tank_level_percent);
+  const copyReport = async () => {
+    try { await navigator.clipboard.writeText(buildReport(decision, events)); setCopied(true); }
+    catch { setCopied("failed"); }
+    setTimeout(() => setCopied(false), 1800);
+  };
+  const litres = v ? litresAtRisk(v.before).toLocaleString("en-IN") : null;
 
   return (
     <main>
@@ -108,6 +126,8 @@ export default function App() {
         <span className="sep" />
         <button className="primary" disabled={busy} onClick={() => rain("GOOD")}>Start RainSafe</button>
         <button disabled={busy} onClick={() => rain("POOR")}>Simulate Poor Sample</button>
+        <button disabled={busy} onClick={() => rain("MISSING")}>Simulate Missing Sensor</button>
+        <button disabled={!(busy && s.rain_safe_state === "COLLECTING")} onClick={() => { faultRef.current = true; }}>Simulate Gate Fault</button>
         <button disabled={busy} onClick={() => guard(async () => { await run("RESET"); setDecision(null); })}>Reset Scenario</button>
       </section>
 
@@ -132,13 +152,27 @@ export default function App() {
               <dt>Approved action</dt><dd>{decision.action}</dd>
               {v && (<><dt>Verification</dt>
                 <dd>{v.before} → {v.after} L/min · <strong className={v.result === "VERIFIED" ? "okt" : "badt"}>{decision.status}</strong></dd></>)}
+              {v && (<><dt>Water at risk</dt><dd>{v.result === "VERIFIED"
+                ? `About ${litres} L kept from running for 8 h (simulation estimate).`
+                : `About ${litres} L could be lost over 8 h at this flow (simulation estimate). Owner action needed.`}</dd></>)}
               <dt>Why</dt><dd>{decision.explanation}</dd>
+              {decision.incident && (<><dt>Report</dt><dd><button onClick={copyReport}>
+                {copied === true ? "Copied" : copied === "failed" ? "Copy failed" : "Copy incident report"}</button></dd></>)}
             </>)}
           </dl>
           <p className="note">Everything in the home is simulated; the backend is real. Thresholds are demo policy values,
             not a drinking-water standard. Passing means "suitable for storage under demo policy", not "safe to drink".</p>
         </section>
       </div>
+
+      <section className="panel" aria-label="Rain forecast advisory">
+        <h2>Rain forecast advisory: {PLACE_NAME}</h2>
+        {forecast === undefined ? <p>Loading forecast…</p>
+          : forecast === null ? <p className="note">Forecast unavailable (offline or blocked). The demo continues with simulated rain.</p>
+          : <p className={adv.level === "warn" ? "badt" : ""}>{adv.text}</p>}
+        <p className="note">Real forecast data from Open-Meteo.com (CC BY 4.0). Advisory only: it never controls the gate.
+          "Start RainSafe" uses simulated rain.</p>
+      </section>
 
       <section className="panel timeline" aria-label="Event timeline">
         <h2>Event timeline</h2>
