@@ -55,7 +55,7 @@ export default function App() {
   const faultRef = useRef(false);
 
   useEffect(() => {
-    getSnapshot().then((d) => { setS(d.state); setEvents(d.events); setStorage(d.storage); })
+    getSnapshot().then((d) => { setS(d.state); setEvents(d.events); setStorage(d.storage); setDecision(d.state.last_decision || null); })
       .catch((e) => setErr(e.message));
   }, []);
 

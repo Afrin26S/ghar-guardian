@@ -76,6 +76,19 @@ class RainSafe(unittest.TestCase):
         self.assertEqual((s["rain_safe_state"], s["gate_state"]), ("ACTUATOR_FAULT", "FAULT"))
 
 
+class Persistence(unittest.TestCase):
+    def test_decision_saved_in_state_and_cleared_by_new_rain(self):
+        s = run(sm.initial_state(), "ACTIVATE_AWAY")[0]
+        s = run(s, "SIMULATE_WATER_ANOMALY")[0]
+        self.assertEqual(s["last_decision"]["action"], "STOP_PUMP")
+        self.assertEqual(run(s, "START_RAIN")[0]["last_decision"], None)
+
+    def test_dynamodb_number_roundtrip(self):
+        import storage
+        s = run(run(sm.initial_state(), "ACTIVATE_AWAY")[0], "SIMULATE_WATER_ANOMALY")[0]
+        self.assertEqual(storage._plain(storage._clean(s)), s)
+
+
 class Handler(unittest.TestCase):
     def test_http_roundtrip(self):
         import json, handler

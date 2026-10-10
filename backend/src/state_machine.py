@@ -28,7 +28,8 @@ def initial_state():
         "mode": "HOME", "occupancy": 3, "water_flow_lpm": 0.0, "pump_state": "OFF",
         "inlet_state": "OPEN", "tank_level_percent": 72, "rain_state": "NONE",
         "rain_safe_state": "IDLE", "gate_state": "CLOSED", "first_flush_complete": False,
-        "last_sample": None, "active_incident": None, "valve_failure": False, "updated_at": now_iso(),
+        "last_sample": None, "last_decision": None, "active_incident": None, "valve_failure": False,
+        "updated_at": now_iso(),
     }
 
 
@@ -108,7 +109,7 @@ def handle(state, event_type, params=None):
     elif event_type == "START_RAIN":
         _require(s["rain_safe_state"] not in RAIN_BUSY, "SCENARIO_RUNNING", "RainSafe is already running.")
         s.update(rain_state="RAINING", rain_safe_state="FIRST_FLUSH", gate_state="CLOSED",
-                 first_flush_complete=False, last_sample=None)
+                 first_flush_complete=False, last_sample=None, last_decision=None)
         log.append(_ev("RAIN_DETECTED", "RAINSAFE", "Rain detected (simulated). Gate stays closed."))
         log.append(_ev("FIRST_FLUSH_STARTED", "RAINSAFE", "First-flush diversion running: initial roof runoff "
                        "is diverted away from the tank."))
@@ -161,5 +162,7 @@ def handle(state, event_type, params=None):
         log.append(_ev(event_type, "RAINSAFE", "Gate actuator fault. Collection stopped; owner notification recommended.",
                        "HIGH", ["ACTUATOR_FAULT"], "STOP_COLLECTION", "GATE: FAULT"))
 
+    if decision is not None:
+        s["last_decision"] = decision  # persisted so the control center survives a page reload
     s["updated_at"] = now_iso()
     return s, log, decision
