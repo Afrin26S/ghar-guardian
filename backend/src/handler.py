@@ -2,6 +2,7 @@ import json
 import os
 
 import state_machine as sm
+import notify
 from storage import get_store
 
 HOME_ID = "DEMO001"
@@ -34,6 +35,7 @@ def lambda_handler(event, context=None):
             if not isinstance(params, dict):
                 return _resp(400, {"ok": False, "error": "BAD_PARAM", "message": "params must be an object."})
             state, new_events, decision = sm.handle(store.get_state(home), body.get("event_type"), params)
+            new_events = new_events + notify.maybe_alert(new_events)
             store.save(home, state, new_events)
             print(json.dumps({"home": home, "event_type": body.get("event_type"), "new_events": len(new_events)}))
             return _resp(200, {"ok": True, "storage": store.name, "decision": decision, "state": state,

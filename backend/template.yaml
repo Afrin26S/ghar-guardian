@@ -6,8 +6,28 @@ Parameters:
   AllowedOrigin:
     Type: String
     Default: http://localhost:5173
+  AlertEmail:
+    Type: String
+    Default: ""
+    Description: Email address for owner alerts (leave blank to disable)
+
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
 
 Resources:
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: ghar-guardian-owner-alerts
+
+  AlertSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
   Table:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -43,8 +63,10 @@ Resources:
         Variables:
           TABLE_NAME: !Ref Table
           ENABLE_BEDROCK: 'false'
+          ALERT_TOPIC_ARN: !Ref AlertTopic
       Policies:
         - DynamoDBCrudPolicy: {TableName: !Ref Table}
+        - SNSPublishMessagePolicy: {TopicName: !GetAtt AlertTopic.TopicName}
       Events:
         Snapshot:
           Type: HttpApi

@@ -89,6 +89,54 @@ class Persistence(unittest.TestCase):
         self.assertEqual(storage._plain(storage._clean(s)), s)
 
 
+class Alerts(unittest.TestCase):
+    def setUp(self):
+        import notify
+        self.notify, self.calls = notify, []
+        outer = self
+
+        class Fake:
+            def __init__(self, fail=False):
+                self.fail = fail
+
+            def publish(self, **kw):
+                if self.fail:
+                    raise RuntimeError("boom")
+                outer.calls.append(kw)
+        self.Fake = Fake
+        os.environ["ALERT_TOPIC_ARN"] = "arn:aws:sns:us-east-1:000000000000:test"
+
+    def tearDown(self):
+        os.environ.pop("ALERT_TOPIC_ARN", None)
+        self.notify._client = None
+
+    def events(self, valve_fail):
+        s = run(sm.initial_state(), "ACTIVATE_AWAY")[0]
+        if valve_fail:
+            s = run(s, "SET_VALVE_FAILURE", enabled=True)[0]
+        return run(s, "SIMULATE_WATER_ANOMALY")[1]
+
+    def test_escalation_publishes_once(self):
+        self.notify._client = self.Fake()
+        extra = self.notify.maybe_alert(self.events(True))
+        self.assertEqual(len(self.calls), 1)
+        self.assertEqual(extra[0]["event_type"], "OWNER_ALERT")
+
+    def test_contained_incident_sends_nothing(self):
+        self.notify._client = self.Fake()
+        self.assertEqual(self.notify.maybe_alert(self.events(False)), [])
+        self.assertEqual(self.calls, [])
+
+    def test_sns_failure_is_logged_not_raised(self):
+        self.notify._client = self.Fake(fail=True)
+        extra = self.notify.maybe_alert(self.events(True))
+        self.assertEqual(extra[0]["event_type"], "OWNER_ALERT_FAILED")
+
+    def test_disabled_without_topic(self):
+        os.environ.pop("ALERT_TOPIC_ARN")
+        self.assertEqual(self.notify.maybe_alert(self.events(True)), [])
+
+
 class Handler(unittest.TestCase):
     def test_http_roundtrip(self):
         import json, handler
