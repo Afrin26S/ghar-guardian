@@ -161,7 +161,7 @@ export default function App() {
             </>)}
           </dl>
           <p className="note">Everything in the home is simulated; the backend is real. Thresholds are demo policy values,
-            not a drinking-water standard. Passing means "suitable for storage under demo policy", not "safe to drink".</p>
+            not a drinking-water standard. Passing means "suitable for storage under demo policy", not "safe to drink". This is a shared public sandbox, so click Reset Scenario before you start.</p>
         </section>
       </div>
 

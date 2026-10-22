@@ -136,6 +136,20 @@ class Alerts(unittest.TestCase):
         os.environ.pop("ALERT_TOPIC_ARN")
         self.assertEqual(self.notify.maybe_alert(self.events(True)), [])
 
+    def test_rate_limit_skips_second_alert(self):
+        self.notify._client = self.Fake()
+        state, ev = {}, self.events(True)
+        first = self.notify.maybe_alert(ev, state)
+        second = self.notify.maybe_alert(ev, state)
+        self.assertEqual(first[0]["event_type"], "OWNER_ALERT")
+        self.assertEqual(second[0]["event_type"], "OWNER_ALERT_SKIPPED")
+        self.assertEqual(len(self.calls), 1)
+
+    def test_alert_allowed_after_interval(self):
+        self.notify._client = self.Fake()
+        state = {"last_alert_at": "2000-01-01T00:00:00+00:00"}
+        self.assertEqual(self.notify.maybe_alert(self.events(True), state)[0]["event_type"], "OWNER_ALERT")
+
 
 class Handler(unittest.TestCase):
     def test_http_roundtrip(self):

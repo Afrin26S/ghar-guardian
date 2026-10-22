@@ -1,6 +1,8 @@
 """Owner alerts via Amazon SNS (email). Optional: active only when ALERT_TOPIC_ARN is set.
-A failure to send is logged as a timeline event and never breaks the request."""
+A failure to send is logged as a timeline event and never breaks the request.
+Rate limited (ALERT_MIN_INTERVAL_SECONDS, default 300) so a public demo cannot flood the owner's inbox."""
 import os
+from datetime import datetime, timezone
 
 import state_machine as sm
 
@@ -29,18 +31,36 @@ def _compose(e):
     return subject, body
 
 
-def maybe_alert(new_events):
-    """Returns extra timeline events (0 or more) describing alert attempts."""
+def _too_soon(state, now, gap):
+    last = (state or {}).get("last_alert_at")
+    if not last:
+        return False
+    try:
+        return (now - datetime.fromisoformat(last)).total_seconds() < gap
+    except ValueError:
+        return False
+
+
+def maybe_alert(new_events, state=None):
+    """Returns extra timeline events describing alert attempts. Updates state['last_alert_at'] on success."""
     topic = os.getenv("ALERT_TOPIC_ARN")
     if not topic:
         return []
+    gap = float(os.getenv("ALERT_MIN_INTERVAL_SECONDS", "300"))
     out = []
     for e in new_events:
         if e["event_type"] not in ALERT_EVENTS:
             continue
+        now = datetime.now(timezone.utc)
+        if _too_soon(state, now, gap):
+            out.append(sm._ev("OWNER_ALERT_SKIPPED", "ALERTING",
+                              "Owner alert skipped: rate limit (one alert email per few minutes).", action="SNS: RATE_LIMITED"))
+            continue
         subject, body = _compose(e)
         try:
             _sns().publish(TopicArn=topic, Subject=subject, Message=body)
+            if state is not None:
+                state["last_alert_at"] = now.isoformat()
             out.append(sm._ev("OWNER_ALERT", "ALERTING", "Owner alert published to Amazon SNS (email).",
                               action="SNS: PUBLISHED"))
         except Exception as ex:

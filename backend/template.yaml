@@ -6,6 +6,10 @@ Parameters:
   AllowedOrigin:
     Type: String
     Default: http://localhost:5173
+  LiveOrigin:
+    Type: String
+    Default: http://localhost:4173
+    Description: Second allowed browser origin (the deployed dashboard, e.g. https://your-app.vercel.app)
   AlertEmail:
     Type: String
     Default: ""
@@ -44,7 +48,7 @@ Resources:
     Type: AWS::Serverless::HttpApi
     Properties:
       CorsConfiguration:
-        AllowOrigins: [!Ref AllowedOrigin]
+        AllowOrigins: [!Ref AllowedOrigin, !Ref LiveOrigin]
         AllowMethods: [GET, POST, OPTIONS]
         AllowHeaders: [content-type]
       DefaultRouteSettings:
@@ -64,6 +68,7 @@ Resources:
           TABLE_NAME: !Ref Table
           ENABLE_BEDROCK: 'false'
           ALERT_TOPIC_ARN: !Ref AlertTopic
+          ALERT_MIN_INTERVAL_SECONDS: '300'
       Policies:
         - DynamoDBCrudPolicy: {TableName: !Ref Table}
         - SNSPublishMessagePolicy: {TopicName: !GetAtt AlertTopic.TopicName}
