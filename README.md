@@ -7,6 +7,8 @@
 A software-first household water digital twin for **Environmental Hacks** (WeMakeDevs x AWS), Heat & Water track.
 The home, sensors, pump, valve and water are **simulated**. The AWS backend is **real**.
 
+**Live demo:** [https://ghar-guardian.vercel.app/](https://ghar-guardian.vercel.app/)
+
 [![Ghar Guardian dashboard. Click to watch the demo video.](docs/dashboard.png)](https://youtu.be/YOUR-VIDEO-ID)
 
 [Watch the demo video on YouTube](https://youtu.be/4hRfUSVseFk)
